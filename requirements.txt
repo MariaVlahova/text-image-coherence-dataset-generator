@@ -1,0 +1,22 @@
+# Presentation Style Dataset Generator - Requirements
+# Install with: pip install -r requirements.txt
+
+# Image processing library
+Pillow>=10.0.0
+
+# LLM support for text generation (optional - install if USE_LLM=True)
+# For OpenAI (default provider):
+openai>=1.0.0
+
+# For Ollama (local models, optional):
+# requests>=2.31.0
+
+# Optional: For better performance with large datasets
+# numpy>=1.24.0
+pandas
+# Optional: For data analysis of generated datasets
+# pandas>=2.0.0
+
+# Optional: For visualization of dataset statistics
+# matplotlib>=3.7.0
+

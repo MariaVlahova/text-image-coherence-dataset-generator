@@ -1,0 +1,110 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Generated Data Directories
+data_complex1/
+data_complex2/
+data/
+output/
+results/
+*.csv
+result.csv
+
+# API Keys and Sensitive Information
+.env
+.env.local
+*.key
+*_api_key.txt
+config.ini
+secrets.json
+.credentials
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary Files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+
+# Test Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.hypothesis/
+
+# Distribution / Packaging
+dist/
+*.whl
+
+# Dataset Metadata (if you want to regenerate)
+dataset_metadata.json
+presentation_texts.txt
+
+# Keep asset images (OIP.png, pres*.png, etc.) - these are project assets
+# Uncomment below if you want to ignore them too:
+# OIP*.png
+# pres*.png
+# logo*.png
+# inline*.png
+
