@@ -19,13 +19,18 @@ class LLMTextGenerator:
         Initialize LLM text generator.
         
         Args:
-            provider: LLM provider ("openai", "ollama", etc.)
+            provider: LLM provider ("openai", "ollama", "deepseek", etc.)
             api_key: API key for the provider (if None, reads from environment)
             enabled: Whether to use LLM (if False, falls back to hardcoded lists)
         """
         self.provider = provider.lower()
         self.enabled = enabled
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        
+        # Get API key based on provider
+        if self.provider == "deepseek":
+            self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+        else:
+            self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         
         # Fallback lists if LLM is disabled or fails
         self._fallback_titles = [
@@ -63,17 +68,28 @@ class LLMTextGenerator:
             import openai
             
             if not self.api_key:
-                print("Warning: OPENAI_API_KEY not set. Falling back to hardcoded text.")
+                provider_name = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "OPENAI_API_KEY"
+                print(f"Warning: {provider_name} not set. Falling back to hardcoded text.")
                 return None
             
-            client = openai.OpenAI(api_key=self.api_key)
+            # Use DeepSeek base URL if provider is deepseek
+            if self.provider == "deepseek":
+                client = openai.OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com/v1")
+            else:
+                client = openai.OpenAI(api_key=self.api_key)
             
             # Prepare messages
             messages = []
             
             if use_vision and image_path and os.path.exists(image_path):
-                # Use vision model (GPT-4 Vision)
-                model = "gpt-4o"  # or "gpt-4o-mini" for cost-effective option
+                # Use vision model
+                if self.provider == "deepseek":
+                    # DeepSeek supports vision with DeepSeek-VL2 model (or DeepSeek-VL)
+                    # Try DeepSeek-VL2 first, fallback to DeepSeek-VL if needed
+                    model = "deepseek-vl2"
+                else:
+                    # Use GPT-4o for vision - most reliable and widely available
+                    model = "gpt-4o"
                 
                 # Encode image to base64
                 with open(image_path, "rb") as image_file:
@@ -99,26 +115,151 @@ class LLMTextGenerator:
                 })
             else:
                 # Text-only model
-                model = "gpt-4o-mini"
+                if self.provider == "deepseek":
+                    model = "deepseek-chat"
+                else:
+                    model = "gpt-4o-mini"
                 messages = [
                     {"role": "system", "content": "You are a professional presentation slide text generator. Generate concise, clear text suitable for business presentations."},
                     {"role": "user", "content": prompt}
                 ]
             
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+            # Some newer models (like gpt-5-nano) require max_completion_tokens instead of max_tokens
+            # and don't support custom temperature values (only default 1)
+            use_max_completion_tokens = "gpt-5" in model.lower() or "o1" in model.lower()
+            # Models that don't support custom temperature
+            no_custom_temperature = "gpt-5" in model.lower() or "o1" in model.lower()
             
-            return response.choices[0].message.content.strip()
+            # Prepare parameters
+            params = {
+                "model": model,
+                "messages": messages,
+            }
+            
+            # Add max_tokens or max_completion_tokens
+            if use_max_completion_tokens:
+                params["max_completion_tokens"] = max_tokens
+            else:
+                params["max_tokens"] = max_tokens
+            
+            # Add temperature only if model supports it
+            if not no_custom_temperature:
+                params["temperature"] = temperature
+            
+            try:
+                response = client.chat.completions.create(**params)
+                return response.choices[0].message.content.strip()
+            except Exception as param_error:
+                # Handle parameter errors by trying different combinations
+                error_str = str(param_error)
+                
+                # If max_tokens fails, try max_completion_tokens
+                if "max_tokens" in error_str and "max_completion_tokens" in error_str.lower():
+                    try:
+                        params.pop("max_tokens", None)
+                        params["max_completion_tokens"] = max_tokens
+                        if "temperature" in params and no_custom_temperature:
+                            params.pop("temperature")
+                        response = client.chat.completions.create(**params)
+                        return response.choices[0].message.content.strip()
+                    except:
+                        pass
+                
+                # If temperature fails, try without it
+                if "temperature" in error_str.lower():
+                    try:
+                        params.pop("temperature", None)
+                        response = client.chat.completions.create(**params)
+                        return response.choices[0].message.content.strip()
+                    except:
+                        pass
+                
+                # If max_completion_tokens fails, try max_tokens
+                if "max_completion_tokens" in error_str and "max_tokens" in error_str.lower():
+                    try:
+                        params.pop("max_completion_tokens", None)
+                        params["max_tokens"] = max_tokens
+                        params.pop("temperature", None)  # Also remove temperature for safety
+                        response = client.chat.completions.create(**params)
+                        return response.choices[0].message.content.strip()
+                    except:
+                        pass
+                
+                # If all else fails, raise the original error
+                raise param_error
         
         except ImportError:
             print("Warning: openai package not installed. Install with: pip install openai")
             return None
         except Exception as e:
-            print(f"Warning: LLM API call failed: {e}. Falling back to hardcoded text.")
+            error_msg = str(e)
+            error_code = None
+            # Try to extract error code from the error message
+            if "402" in error_msg or "insufficient" in error_msg.lower() or "balance" in error_msg.lower():
+                error_code = 402
+            elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                error_code = 401
+            elif "404" in error_msg:
+                error_code = 404
+            
+            provider_name = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "OPENAI_API_KEY"
+            provider_url = "https://platform.deepseek.com" if self.provider == "deepseek" else "https://platform.openai.com"
+            
+            # Print detailed error for debugging
+            if use_vision:
+                print(f"⚠️  Vision API Error Details:")
+                print(f"   Error: {error_msg}")
+                print(f"   Provider: {self.provider}")
+                print(f"   Model: {model if 'model' in locals() else 'unknown'}")
+            
+            if error_code == 402:
+                print(f"\n{'='*70}")
+                print(f"⚠️  ERROR: Insufficient Balance (402)")
+                print(f"{'='*70}")
+                print(f"Your {self.provider.upper()} API account has insufficient credits/balance.")
+                print(f"\nOptions to resolve:")
+                print(f"  1. Add credits to your account:")
+                print(f"     → Visit: {provider_url}")
+                print(f"     → Add funds to your account")
+                print(f"\n  2. Switch to FREE Ollama (recommended for testing):")
+                print(f"     → Install Ollama from: https://ollama.com/download")
+                print(f"     → In your script, change: LLM_PROVIDER = \"ollama\"")
+                print(f"     → No API key or credits needed!")
+                print(f"\n  3. Switch to OpenAI (if you have credits there):")
+                print(f"     → In your script, change: LLM_PROVIDER = \"openai\"")
+                print(f"     → Set environment variable: $env:OPENAI_API_KEY = \"your-key\"")
+                print(f"\n  4. Continue with fallback text (no LLM):")
+                print(f"     → Set USE_LLM = False in your script")
+                print(f"     → The script will use hardcoded text lists")
+                print(f"{'='*70}\n")
+            elif error_code == 401:
+                print(f"  → Check your {provider_name} - API key may be invalid or expired")
+                print(f"  → Visit {provider_url} to get a new API key")
+            elif "404" in error_msg or "model" in error_msg.lower() or "not found" in error_msg.lower():
+                if use_vision and self.provider == "deepseek":
+                    print(f"  → DeepSeek vision model (deepseek-vl2 or deepseek-vl) may not be available")
+                    print(f"  → Check if DeepSeek-VL models are available in your API account")
+                    print(f"  → You can try: deepseek-vl2, deepseek-vl, or deepseek-chat")
+                    print(f"  → Falling back to content-based text generation")
+                elif use_vision and self.provider == "openai":
+                    print(f"  → Vision model may not be available or accessible")
+                    print(f"  → GPT-5-nano might not be available in your account")
+                    print(f"  → The code will try fallback models (GPT-4o, GPT-4o-mini)")
+                else:
+                    print(f"  → Model may not be available. For vision, ensure you're using a vision-capable model")
+            elif "rate limit" in error_msg.lower():
+                print(f"  → Rate limit exceeded. Please wait and try again")
+            else:
+                if use_vision:
+                    print(f"  → Vision API call failed. This may indicate:")
+                    print(f"     - Model doesn't support vision (DeepSeek may not support vision via chat/completions)")
+                    print(f"     - API endpoint issue")
+                    print(f"     - Image format/encoding problem")
+                else:
+                    print(f"Warning: LLM API call failed: {error_msg}")
+                    print(f"  → Provider: {self.provider}")
+                    print(f"  → Check your {provider_name} and account status")
+            
             return None
     
     def _call_ollama(self, prompt: str, model: str = "llama3.2", max_tokens: int = 50) -> Optional[str]:
@@ -170,7 +311,7 @@ class LLMTextGenerator:
             prompt += f"Context: {context}. "
         prompt += "Return only the title, no quotes or extra text."
         
-        if self.provider == "openai":
+        if self.provider == "openai" or self.provider == "deepseek":
             result = self._call_openai(prompt, max_tokens=20)
         elif self.provider == "ollama":
             result = self._call_ollama(prompt, max_tokens=20)
@@ -206,7 +347,7 @@ class LLMTextGenerator:
             prompt += f"Make it relevant to: {title}. "
         prompt += "Focus on achievements, metrics, or key points. Return only the bullet point text, no bullet symbol."
         
-        if self.provider == "openai":
+        if self.provider == "openai" or self.provider == "deepseek":
             result = self._call_openai(prompt, max_tokens=30)
         elif self.provider == "ollama":
             result = self._call_ollama(prompt, max_tokens=30)
@@ -250,7 +391,7 @@ class LLMTextGenerator:
             prompt += f"Theme: {theme}. "
         prompt += f"Return exactly {num_cols} headers, one per line, short (1-2 words each). No numbers or extra formatting."
         
-        if self.provider == "openai":
+        if self.provider == "openai" or self.provider == "deepseek":
             result = self._call_openai(prompt, max_tokens=50, temperature=0.7)
         elif self.provider == "ollama":
             result = self._call_ollama(prompt, max_tokens=50)
@@ -337,7 +478,14 @@ class LLMTextGenerator:
         if not os.path.exists(image_path):
             return f"Image not found: {image_path}"
         
-        prompt = f"""You are analyzing a presentation slide image. Generate a short presentation script (2-3 sentences, max {max_length} characters) that a presenter would use to introduce and explain this slide to an audience.
+        # Verify API key is available
+        if (self.provider == "openai" or self.provider == "deepseek") and not self.api_key:
+            provider_name = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "OPENAI_API_KEY"
+            print(f"Error: {provider_name} not set. Cannot generate presentation text.")
+            print(f"  → Set environment variable: $env:{provider_name} = \"your-key\"")
+            return f"Presentation about this slide (API key not configured)"
+        
+        prompt = f"""You are analyzing a presentation slide image. Generate a short presentation script (3-5 sentences, max {max_length} characters) that a presenter would use to introduce and explain this slide to an audience.
 
 Analyze the slide image carefully and identify:
 - The title/main topic
@@ -349,18 +497,100 @@ The presentation text should be natural, engaging, and suitable for a business p
 
 Return only the presentation text, no quotes or extra formatting."""
 
-        if self.provider == "openai":
-            result = self._call_openai(
-                prompt, 
-                max_tokens=max_length // 4, 
-                temperature=0.8,
-                image_path=image_path,
-                use_vision=True
-            )
+        # Try to generate presentation text using vision
+        result = None
+        
+        # Try to generate presentation text using vision
+        if self.provider == "openai" or self.provider == "deepseek":
+            model_name = "DeepSeek-VL2" if self.provider == "deepseek" else "GPT-4o"
+            print(f"Attempting to generate presentation text using {self.provider} vision model ({model_name})...")
+            try:
+                result = self._call_openai(
+                    prompt, 
+                    max_tokens=max_length // 4, 
+                    temperature=0.8,
+                    image_path=image_path,
+                    use_vision=True
+                )
+            except Exception as e:
+                error_msg = str(e)
+                print(f"⚠️  Vision API Error: {error_msg}")
+                
+                # If OpenAI and model not found, try GPT-4o-mini as fallback
+                if self.provider == "openai" and ("404" in error_msg.lower() or "model" in error_msg.lower() or "not found" in error_msg.lower() or "does not exist" in error_msg.lower()):
+                    print(f"  GPT-4o may not be available. Trying GPT-4o-mini as fallback...")
+                    try:
+                        import openai
+                        if not self.api_key:
+                            result = None
+                        else:
+                            client = openai.OpenAI(api_key=self.api_key)
+                            with open(image_path, "rb") as image_file:
+                                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+                            image_format = "png" if image_path.lower().endswith('.png') else "jpeg"
+                            
+                            response = client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[{
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "text", "text": prompt},
+                                        {
+                                            "type": "image_url",
+                                            "image_url": {"url": f"data:image/{image_format};base64,{image_data}"}
+                                        }
+                                    ]
+                                }],
+                                max_tokens=max_length // 4,
+                                temperature=0.8,
+                            )
+                            result = response.choices[0].message.content.strip()
+                            print(f"  ✓ Successfully used GPT-4o-mini model for vision")
+                    except Exception as e2:
+                        print(f"  GPT-4o-mini also failed: {e2}")
+                        result = None
+                # If DeepSeek-VL2 fails, try DeepSeek-VL as fallback
+                elif self.provider == "deepseek" and ("404" in error_msg.lower() or "model" in error_msg.lower() or "not found" in error_msg.lower()):
+                    print(f"  DeepSeek-VL2 not available, trying DeepSeek-VL...")
+                    try:
+                        import openai
+                        if not self.api_key:
+                            result = None
+                        else:
+                            client = openai.OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com/v1")
+                            with open(image_path, "rb") as image_file:
+                                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+                            image_format = "png" if image_path.lower().endswith('.png') else "jpeg"
+                            
+                            response = client.chat.completions.create(
+                                model="deepseek-vl",
+                                messages=[{
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "text", "text": prompt},
+                                        {
+                                            "type": "image_url",
+                                            "image_url": {"url": f"data:image/{image_format};base64,{image_data}"}
+                                        }
+                                    ]
+                                }],
+                                max_tokens=max_length // 4,
+                                temperature=0.8,
+                            )
+                            result = response.choices[0].message.content.strip()
+                            print(f"  ✓ Successfully used DeepSeek-VL model")
+                    except Exception as e2:
+                        print(f"  DeepSeek-VL also failed: {e2}")
+                        result = None
+                else:
+                    print(f"  Vision API call failed. Error details: {error_msg}")
+                    result = None
         elif self.provider == "ollama":
             # For Ollama, try to use vision model if available
+            print(f"Attempting to generate presentation text using Ollama vision model...")
             result = self._call_ollama_vision(prompt, image_path, max_tokens=max_length // 4)
         else:
+            print(f"Warning: Unknown provider '{self.provider}' for vision generation")
             result = None
         
         if result:
@@ -375,9 +605,58 @@ Return only the presentation text, no quotes or extra formatting."""
                     result = '. '.join(sentences[:2])
                 if len(result) > max_length:
                     result = result[:max_length - 3] + "..."
-            return result
+            
+            if result and len(result.strip()) > 10:  # Ensure we have meaningful content
+                print(f"Successfully generated presentation text ({len(result)} chars)")
+                return result
+            else:
+                print(f"Warning: Generated text too short or empty, retrying...")
         
-        # Fallback
+        # If vision failed, try generating text without vision as fallback
+        if result is None:
+            print(f"Vision analysis failed, attempting text-only generation based on image path...")
+            
+            # Check if API key is available before trying fallback
+            if (self.provider == "openai" or self.provider == "deepseek") and not self.api_key:
+                provider_name = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "OPENAI_API_KEY"
+                print(f"  ✗ Error: {provider_name} not set. Cannot generate presentation text.")
+                print(f"  → Set environment variable: $env:{provider_name} = \"your-key\"")
+                return f"Presentation about this slide (API key not configured)"
+            
+            fallback_prompt = f"""Generate a short presentation script (3-5 sentences, max {max_length} characters) for a presentation slide. 
+The slide likely contains business content such as titles, bullet points, tables, and data visualizations.
+Write as if you're a presenter introducing this slide to an audience. Be natural and engaging.
+Return only the presentation text, no quotes or extra formatting."""
+            
+            try:
+                if self.provider == "openai" or self.provider == "deepseek":
+                    result = self._call_openai(fallback_prompt, max_tokens=max_length // 4, temperature=0.8)
+                elif self.provider == "ollama":
+                    result = self._call_ollama(fallback_prompt, max_tokens=max_length // 4)
+            except Exception as fallback_error:
+                print(f"  ✗ Fallback text generation also failed: {fallback_error}")
+                result = None
+        
+        if result:
+            result = result.strip().strip('"').strip("'")
+            if len(result) > max_length:
+                result = result[:max_length - 3] + "..."
+            if result and len(result.strip()) > 10:
+                print(f"Generated presentation text using fallback method ({len(result)} chars)")
+                return result
+        
+        # Last resort fallback - provide detailed error information
+        print(f"\n✗ Error: Could not generate presentation text.")
+        print(f"  Provider: {self.provider}")
+        if self.provider == "openai" or self.provider == "deepseek":
+            provider_name = "DEEPSEEK_API_KEY" if self.provider == "deepseek" else "OPENAI_API_KEY"
+            api_key_set = "✓ Set" if self.api_key else "✗ Not set"
+            print(f"  API Key: {api_key_set}")
+            if not self.api_key:
+                print(f"  → Set environment variable: $env:{provider_name} = \"your-key\"")
+            else:
+                print(f"  → Check if your API key is valid and has sufficient credits")
+                print(f"  → Verify the model (GPT-5-nano) is available in your account")
         return f"Presentation about this slide (analysis unavailable)"
     
     def _call_ollama_vision(self, prompt: str, image_path: str, model: str = "llama3.2-vision", max_tokens: int = 50) -> Optional[str]:
@@ -419,4 +698,53 @@ Return only the presentation text, no quotes or extra formatting."""
         except Exception as e:
             print(f"Warning: Ollama vision API call failed: {e}. Trying text-only fallback.")
             return self._call_ollama(prompt, max_tokens=max_tokens)
+    
+    def generate_presentation_text_from_content(self, title: str, bullet_points: List[str], 
+                                                 table_headers: Optional[List[str]] = None, 
+                                                 max_length: int = 200) -> str:
+        """
+        Generate presentation text based on slide content (title, bullets, table headers).
+        This is a fallback when vision analysis is not available.
+        
+        Args:
+            title: Slide title
+            bullet_points: List of bullet points
+            table_headers: Optional list of table headers
+            max_length: Maximum length of generated text in characters
+            
+        Returns:
+            Generated presentation text
+        """
+        if not self.enabled:
+            return f"Presentation about this slide (LLM disabled)"
+        
+        bullets_text = "\n".join([f"- {bp}" for bp in bullet_points])
+        table_info = f"\nTable Headers: {', '.join(table_headers)}" if table_headers else ""
+        
+        prompt = f"""Generate a short presentation script (3-5 sentences, max {max_length} characters) for a presentation slide with the following content:
+
+Title: {title}
+Key Points:
+{bullets_text}{table_info}
+
+Write as if you're a presenter introducing this slide to an audience. Be natural, engaging, and focus on the main message. Return only the presentation text, no quotes or extra formatting."""
+        
+        if self.provider == "openai" or self.provider == "deepseek":
+            result = self._call_openai(prompt, max_tokens=max_length // 4, temperature=0.8)
+        elif self.provider == "ollama":
+            result = self._call_ollama(prompt, max_tokens=max_length // 4)
+        else:
+            result = None
+        
+        if result:
+            result = result.strip().strip('"').strip("'")
+            if len(result) > max_length:
+                result = result[:max_length - 3] + "..."
+            if result and len(result.strip()) > 20:
+                return result
+        
+        # Fallback: create simple description
+        bullets_desc = " and ".join([bp.lower() for bp in bullet_points[:2]])
+        table_desc = f" with a data table showing {', '.join(table_headers[:3])}" if table_headers else ""
+        return f"This slide presents {title.lower()}. Key highlights include {bullets_desc}.{table_desc}."
 

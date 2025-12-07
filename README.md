@@ -1,37 +1,191 @@
 # Presentation Style Dataset Generator
 
-Generate balanced datasets of presentation slide images with varying style attributes for machine learning applications.
+Generate complex presentation slide images with LLM-generated text for machine learning applications. This tool creates presentation-style images with tables, logos, inline images, bullets, and borders, all with AI-generated meaningful content.
 
 ## 📦 Installation
 
-### Option 1: Automatic Setup (Recommended)
-```
-1. Double-click: setup.bat
-2. Wait for installation to complete
-```
+### Prerequisites
+- **Python 3.7+**
+- **Windows** (fonts configured for Windows paths)
 
-### Option 2: Manual Installation
+### Step 1: Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### Option 3: Install Pillow Only
+Or install minimal requirements:
 ```bash
-pip install Pillow
+pip install Pillow pandas openai
 ```
 
-## 🚀 Quick Start
+**Note:** If you're using Ollama (free local option), you only need `Pillow` and `pandas`. The `openai` package is only needed for OpenAI/DeepSeek providers.
 
-### Option 1: Double-click (Easiest)
-```
-1. Double-click: run_main.bat
-2. Wait for generation to complete
-3. Check the 'data' folder for results
+## 🔑 LLM API Key Setup
+
+This project uses LLMs to generate meaningful text content. You have three options:
+
+### Option 1: Ollama (FREE - Recommended for Testing)
+
+**Ollama runs locally on your computer - no API key needed!**
+
+1. **Download and install Ollama:**
+   - Visit: https://ollama.com/download
+   - Download and install for Windows
+
+2. **Pull a model:**
+   ```powershell
+   ollama pull llama3.2
+   ```
+   
+   For vision capabilities (image analysis):
+   ```powershell
+   ollama pull llama3.2-vision
+   ```
+
+3. **Configure the script:**
+   In `main_img_text_coherence.py`, set:
+   ```python
+   LLM_PROVIDER = "ollama"
+   LLM_API_KEY = None  # No API key needed
+   ```
+
+### Option 2: OpenAI (Cloud-based, Paid)
+
+**Cost:** ~$0.15 per million input tokens, $0.60 per million output tokens  
+**Free trial:** New users get $5 free credits
+
+1. **Get your API key:**
+   - Visit: https://platform.openai.com/api-keys
+   - Click "Create new secret key"
+   - Copy the key (you'll only see it once!)
+
+2. **Set the API key (choose one method):**
+
+   **Method A: Environment Variable (Recommended)**
+   ```powershell
+   # In PowerShell:
+   $env:OPENAI_API_KEY = "sk-your-api-key-here"
+   ```
+   
+   **Method B: Direct in code**
+   In `main_img_text_coherence.py`, change line 35:
+   ```python
+   LLM_API_KEY = "sk-your-api-key-here"  # Replace with your actual key
+   ```
+
+3. **Configure the script:**
+   ```python
+   LLM_PROVIDER = "openai"
+   ```
+
+### Option 3: DeepSeek (Cost-effective Alternative)
+
+1. **Get your API key:**
+   - Visit: https://platform.deepseek.com
+   - Sign up and get your API key
+
+2. **Set the API key:**
+
+   **Method A: Environment Variable (Recommended)**
+   ```powershell
+   # In PowerShell:
+   $env:DEEPSEEK_API_KEY = "your-api-key-here"
+   ```
+   
+   **Method B: Direct in code**
+   In `main_img_text_coherence.py`, change line 35:
+   ```python
+   LLM_API_KEY = "your-api-key-here"
+   ```
+
+3. **Configure the script:**
+   ```python
+   LLM_PROVIDER = "deepseek"
+   ```
+
+## 🚀 Running the Project
+
+### Quick Start
+
+1. **Configure your LLM provider** (see above)
+
+2. **Run the script:**
+   ```bash
+   python main_img_text_coherence.py
+   ```
+
+3. **Check the output:**
+   - Generated images: `generated_data/` folder
+   - Metadata: `generated_data/dataset_metadata.json`
+   - Presentation texts: `generated_data/presentation_texts.txt`
+   - Results CSV: `result.csv`
+
+### Example: Running with OpenAI API Key
+
+```powershell
+# Set API key in PowerShell
+$env:OPENAI_API_KEY = "sk-your-key-here"
+
+# Run the script
+python main_img_text_coherence.py
 ```
 
-### Option 2: Command Line
-```bash
-python main.py
+### Example: Running with DeepSeek API Key
+
+```powershell
+# Set API key in PowerShell
+$env:DEEPSEEK_API_KEY = "your-key-here"
+
+# Run the script
+python main_img_text_coherence.py
+```
+
+### Example: Running with Ollama (No API Key)
+
+```powershell
+# Make sure Ollama is running (it should start automatically)
+# Then just run:
+python main_img_text_coherence.py
+```
+
+## ⚙️ Configuration
+
+Edit `main_img_text_coherence.py` to customize settings:
+
+### Basic Settings
+```python
+NUM_SAMPLES = 20                    # Number of images to generate
+OUTPUT_DIR = "generated_data"       # Output folder name
+img_size = (224, 224)               # Image dimensions (width x height)
+```
+
+### LLM Settings
+```python
+USE_LLM = True                       # Set to False to use hardcoded text
+LLM_PROVIDER = "deepseek"            # Options: "openai", "ollama", "deepseek"
+LLM_API_KEY = None                  # Set here or use environment variable
+GENERATE_PRESENTATION_TEXT = True   # Generate text by analyzing images (requires vision model)
+PRESENTATION_TEXT_MAX_LENGTH = 200  # Maximum length of presentation text
+```
+
+### Table Settings
+```python
+TABLE_MIN_ROWS = 2
+TABLE_MAX_ROWS = 4
+TABLE_MIN_COLS = 2
+TABLE_MAX_COLS = 4
+```
+
+### Font Paths (Windows)
+The default fonts are configured for Windows. If you're on a different system, update:
+```python
+font_list = [
+    "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+    "C:\\Windows\\Fonts\\times.ttf",
+    # ... add more fonts
+]
 ```
 
 ## 📁 Output Structure
@@ -39,227 +193,152 @@ python main.py
 After running, you'll get:
 
 ```
-data/
-├── img1_0.png          # First image of pair 0
-├── img2_0.png          # Second image of pair 0
-├── img1_1.png          # First image of pair 1
-├── img2_1.png          # Second image of pair 1
+generated_data/
+├── img1_0.png              # Generated image 0
+├── img1_1.png              # Generated image 1
 ├── ...
-├── img1_49.png
-├── img2_49.png
-├── dataset_metadata.json  # Complete dataset information
-├── logo1.png           # Dummy logo (auto-generated)
-├── logo2.png
-├── logo3.png
-├── inline1.png         # Dummy inline images (auto-generated)
-├── inline2.png
-└── inline3.png
+├── img1_19.png             # Generated image 19
+├── dataset_metadata.json   # Complete dataset information
+└── presentation_texts.txt # Generated presentation texts
+
+result.csv                  # Results in CSV format
 ```
 
-## 📊 Dataset Features
-
-### Style Attributes
-Each image pair varies in these attributes:
-- ✅ **Fonts** (Arial, Times, Verdana, Calibri)
-- ✅ **Background colors** (4 shades of white/gray)
-- ✅ **Text colors** (4 shades of black/gray)
-- ✅ **Borders** (widths: 1-4 pixels)
-- ✅ **Logo positions** (4 corners)
-- ✅ **Bullet points** (enabled/disabled)
-- ✅ **Tables** (customizable rows/columns, borders, colors)
-- ✅ **Inline images** (1 or 2 images per slide)
-
-### Dataset Balance
-- **50% identical pairs**: Both images have exactly the same style
-- **50% different pairs**: Images differ by one or more attributes
-
-### Labels
-Each pair has two labels:
-1. **style_label**: `1` = identical, `0` = different
-2. **font_label**: `1` = same font, `0` = different fonts
-
-## ⚙️ Configuration
-
-Edit `main.py` to customize:
-
-### Basic Settings
-```python
-NUM_SAMPLES = 50        # Number of image pairs
-OUTPUT_DIR = "data"     # Output folder name
-img_size = (1024, 768)  # Image dimensions
-```
-
-### Table Settings
-```python
-TABLE_MIN_ROWS = 2      # Minimum table rows
-TABLE_MAX_ROWS = 5      # Maximum table rows
-TABLE_MIN_COLS = 2      # Minimum table columns
-TABLE_MAX_COLS = 4      # Maximum table columns
-```
-
-### Font Paths (Important!)
-Update these to match your system:
-```python
-font_list = [
-    "C:\\Windows\\Fonts\\arial.ttf",
-    "C:\\Windows\\Fonts\\times.ttf",
-    "C:\\Windows\\Fonts\\verdana.ttf",
-    "C:\\Windows\\Fonts\\calibri.ttf"
-]
-```
-
-### Colors
-```python
-background_colors = ["#FFFFFF", "#F5F5F5", "#E8E8E8", "#FAFAFA"]
-text_colors = ["#000000", "#1a1a1a", "#333333", "#2c2c2c"]
-table_border_colors = ["#000000", "#333333", "#555555", "#777777"]
-```
-
-## 📋 Dataset Metadata
-
-The generated `dataset_metadata.json` contains:
+### Dataset Metadata Example
 ```json
 {
   "generation_date": "2024-11-13 14:30:00",
-  "num_samples": 50,
+  "num_samples": 20,
+  "complex_images": true,
+  "all_features_enabled": true,
+  "presentation_texts_enabled": true,
   "dataset": [
     {
-      "pair_id": 0,
-      "img1": "data\\img1_0.png",
-      "img2": "data\\img2_0.png",
-      "style_label": 1,
-      "font_label": 1,
-      "style_match": "identical",
-      "font_match": "same"
-    },
-    ...
+      "image_id": 0,
+      "image_path": "generated_data\\img1_0.png",
+      "presentation_text": "This slide presents quarterly sales data...",
+      "filename": "img1_0.png"
+    }
   ]
 }
 ```
 
-## 🎨 Image Elements
+## 📊 Dataset Features
 
+### Complex Images (All Features Enabled)
 Each generated image includes:
+- ✅ **Title** (LLM-generated, max 2 rows)
+- ✅ **Bullet points** (2 bullet points, LLM-generated)
+- ✅ **Tables** (2-4 rows, 2-4 columns, LLM-generated headers and data)
+- ✅ **Logos** (positioned in one of 4 corners)
+- ✅ **Inline images** (always 2 images per slide)
+- ✅ **Borders** (2-5 pixels width)
+- ✅ **Presentation text** (generated by analyzing the image with vision model)
 
-1. **Title** (large text at top)
-2. **Text content** (1-3 lines, with or without bullets)
-3. **Tables** (~30% of images)
-   - Customizable rows and columns
-   - Headers and data cells
-   - Configurable borders and colors
-4. **Inline images** (~30% chance each)
-   - Can have 0, 1, or 2 images per slide
-   - Placed side-by-side if both present
-5. **Logo** (positioned in one of 4 corners)
-6. **Border** (optional, various widths)
+### Style Attributes
+- **Fonts**: Arial, Times, Verdana, Calibri, Georgia (with bold variants)
+- **Background colors**: 10 shades of white/gray
+- **Text colors**: 10 shades of black/gray
+- **Table borders**: Various widths and colors
+- **Logo positions**: 4 corners (top-left, top-right, bottom-left, bottom-right)
 
 ## 🔧 Advanced Usage
 
-### Generate 100 samples
+### Disable LLM (Use Hardcoded Text)
 ```python
-# In main.py, change:
-NUM_SAMPLES = 100
+USE_LLM = False  # Will use fallback text lists
 ```
 
-### Large tables (5-10 rows)
+### Disable Presentation Text Generation
 ```python
-# In main.py, change:
-TABLE_MIN_ROWS = 5
-TABLE_MAX_ROWS = 10
-TABLE_MIN_COLS = 3
-TABLE_MAX_COLS = 6
+GENERATE_PRESENTATION_TEXT = False  # Skips image analysis
 ```
 
-### Fixed table size (exactly 4x4)
+### Generate More Samples
 ```python
-# In main.py, change:
-TABLE_MIN_ROWS = 4
-TABLE_MAX_ROWS = 4
-TABLE_MIN_COLS = 4
-TABLE_MAX_COLS = 4
+NUM_SAMPLES = 100  # Generate 100 images
 ```
 
-### Custom output location
+### Custom Output Directory
 ```python
-# In main.py, change:
-OUTPUT_DIR = "my_dataset/training_data"
+OUTPUT_DIR = "my_custom_dataset"
 ```
 
 ## 🖼️ Using Your Own Assets
 
-Replace dummy assets with your own:
-
 ### Logos
-Place your logos in the project directory and update:
+Place your logos in the `data/` folder and update:
 ```python
-logo_path = ["my_logo1.png", "my_logo2.png", "my_logo3.png"]
+logo_path = ["data/my_logo1.png", "data/my_logo2.png", ...]
 ```
 
 ### Inline Images
-Place your images in the project directory and update:
+Place your images in the `data/` folder and update:
 ```python
-inline_img = ["photo1.jpg", "photo2.jpg", "photo3.jpg"]
+inline_img = ["data/pres2.png", "data/pres3.png", ...]
 ```
 
-## 📦 Requirements
-
-### Minimum Requirements
-- **Python 3.7+**
-- **Pillow 10.0.0+** (PIL for image processing)
-
-### Installation
-Install all dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-Or install minimal requirements:
-```bash
-pip install Pillow
-```
-
-### Optional Dependencies (Commented in requirements.txt)
-- `numpy` - For better performance with large datasets
-- `pandas` - For data analysis of generated datasets  
-- `matplotlib` - For visualization of dataset statistics
+**Note:** If assets don't exist, the script will auto-generate dummy placeholders.
 
 ## 🐛 Troubleshooting
 
-### Font not found error
-- Update `font_list` in `main.py` with correct paths
-- On Windows, fonts are typically in `C:\Windows\Fonts\`
-- On Mac, try `/Library/Fonts/` or `/System/Library/Fonts/`
-- On Linux, try `/usr/share/fonts/`
+### "API key not set" Warning
+- **For OpenAI:** Set `OPENAI_API_KEY` environment variable or `LLM_API_KEY` in code
+- **For DeepSeek:** Set `DEEPSEEK_API_KEY` environment variable or `LLM_API_KEY` in code
+- **For Ollama:** Make sure Ollama is installed and running (no API key needed)
 
-### Import error
-Make sure all files are in the same directory:
-- `main.py`
-- `datasetGenaratorPStyle.py`
+### Font Not Found Error
+- Update `font_list` in `main_img_text_coherence.py` with correct paths
+- On Windows: fonts are in `C:\Windows\Fonts\`
+- On Mac: try `/Library/Fonts/` or `/System/Library/Fonts/`
+- On Linux: try `/usr/share/fonts/`
 
-### Permission denied
+### Ollama Connection Error
+- Make sure Ollama is installed and running
+- Check if Ollama service is running: `ollama list` (should show your models)
+- Default URL is `http://localhost:11434`
+
+### Import Error
+Make sure all required files are in the same directory:
+- `main_img_text_coherence.py`
+- `llm_text_generator.py`
+
+### Permission Denied
 - Make sure the output directory is writable
 - Run as administrator if necessary
 
-## 📊 Example Output Statistics
+## 💰 Cost Estimates
 
-After generation, you'll see:
-```
-Dataset Statistics:
-  - Total pairs generated: 50
-  - Style labels: 25 identical, 25 different
-  - Font labels: 28 same, 22 different
-```
+For generating 20 images:
+- **Ollama:** FREE (runs locally)
+- **OpenAI GPT-4o-mini:** ~$0.01-0.05 (very cheap)
+- **OpenAI GPT-4o (with vision):** ~$0.10-0.30 (for image analysis)
+- **DeepSeek:** Similar to OpenAI, often cheaper
 
-The dataset is automatically balanced for style labels (50/50 split).
+## 📋 Requirements
+
+### Required
+- `Pillow>=10.0.0` - Image processing
+- `pandas` - Data handling
+
+### Optional (for LLM)
+- `openai>=1.0.0` - For OpenAI/DeepSeek providers
+- `requests>=2.31.0` - For Ollama (usually pre-installed)
 
 ## 🎯 Use Cases
 
 This dataset generator is perfect for:
-- Training style similarity models
-- Presentation analysis
-- Document comparison systems
+- Training image-text coherence models
+- Presentation style analysis
+- Document understanding systems
 - Visual consistency detection
 - Layout recognition tasks
+- Multi-modal learning research
+
+## 📄 Additional Resources
+
+- See `API_KEY_SETUP.md` for detailed API key setup instructions
+- Check `generated_data/dataset_metadata.json` for complete dataset information
 
 ## 📄 License
 
@@ -268,4 +347,3 @@ Free to use for research and educational purposes.
 ---
 
 **Happy Dataset Generating! 🎉**
-
