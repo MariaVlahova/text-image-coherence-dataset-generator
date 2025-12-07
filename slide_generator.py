@@ -1,86 +1,12 @@
 """
-Main script to generate COMPLEX presentation style images only.
-This file generates images with ALL features enabled:
-- Tables (always enabled, larger sizes)
-- Logos (always enabled)
-- Multiple inline images (always 2 images)
-- Multiple text lines (title + text1 + text2)
-- Bullets (always enabled)
-- Borders (always enabled)
+Slide generation module for creating presentation-style images.
+Handles image rendering, text layout, tables, logos, and inline images.
 """
 
-import random
 import os
+import random
 from PIL import Image, ImageDraw, ImageFont
-from datasetGenaratorPStyle import create_balanced_dataset, generate_table_data, generate_random_text
-import json
-from datetime import datetime
 
-
-# ============================================================
-# CONFIGURATION - Complex Images Only
-# ============================================================
-
-# Dataset settings
-NUM_SAMPLES = 50  # Number of image pairs to generate
-OUTPUT_DIR = "data_complex1"  # Subfolder where dataset will be saved
-
-# Table settings - LARGER tables for complexity
-TABLE_MIN_ROWS = 2
-TABLE_MAX_ROWS = 4
-TABLE_MIN_COLS = 2
-TABLE_MAX_COLS = 4
-
-# Image size settings - LARGER images
-img_size = (224, 224)  # Width x Height in pixels (larger than default)
-logo_size = (20, 20)  # Scaled for 224x224
-
-# Font settings (more fonts for variety)
-font_list = [
-    "C:\\Windows\\Fonts\\arial.ttf",
-    "C:\\Windows\\Fonts\\arialbd.ttf",
-    "C:\\Windows\\Fonts\\times.ttf",
-    "C:\\Windows\\Fonts\\timesbd.ttf",
-    "C:\\Windows\\Fonts\\verdana.ttf",
-    "C:\\Windows\\Fonts\\verdanab.ttf",
-    "C:\\Windows\\Fonts\\calibri.ttf",
-    "C:\\Windows\\Fonts\\calibrib.ttf",
-    "C:\\Windows\\Fonts\\georgia.ttf",
-    "C:\\Windows\\Fonts\\georgiab.ttf"
-]
-
-# Color settings - more variety
-background_colors = [
-    "#FFFFFF", "#FAFAFA", "#F5F5F5", "#F0F0F0", "#E8E8E8", 
-    "#E0E0E0", "#D3D3D3", "#FFF8DC", "#F5F5DC", "#FDF5E6"
-]
-text_colors = [
-    "#000000", "#0A0A0A", "#141414", "#1a1a1a", "#1F1F1F",
-    "#262626", "#2c2c2c", "#333333", "#3D3D3D", "#404040"
-]
-border_color = "#000000"
-
-# Border settings - thicker borders
-border = [2, 3, 4, 5]
-
-# Logo settings
-logo_path = ["OIP.png", "OIP (1).png", "OIP (2).png", "OIP (3).png", "OIP (4).png", "OIP (5).png"]
-logo_position = ["top-left", "top-right", "bottom-left", "bottom-right"]
-
-# Inline image settings - always use 2 images
-inline_img = ["pres2.png", "pres3.png", "pres4.png", "pres5.png", "pres6.png"]
-
-# Table settings - thicker borders
-table_borders = [2, 3, 4]
-table_border_colors = [
-    "#000000", "#1a1a1a", "#262626", "#333333", "#404040",
-    "#4d4d4d", "#555555", "#595959", "#666666"
-]
-
-
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
 
 def wrap_text_by_words(text, draw, font, max_width):
     """
@@ -487,16 +413,23 @@ def generate_image(font_path, img_background_color, output_path, text_color,
     img.save(output_path)
 
 
-def setup_dummy_assets():
-    """Create dummy logos and inline images if they don't exist."""
+def setup_dummy_assets(logo_paths, logo_size, inline_img_paths):
+    """
+    Create dummy logos and inline images if they don't exist.
+    
+    Args:
+        logo_paths: List of logo file paths
+        logo_size: Size tuple for logos (width, height)
+        inline_img_paths: List of inline image file paths
+    """
     print("Setting up dummy assets...")
     
-    for i, logo_file in enumerate(logo_path):
+    for i, logo_file in enumerate(logo_paths):
         if not os.path.exists(logo_file):
             color = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#95E1D3", "#F38181", "#AA96DA"][i % 6]
             create_dummy_image(logo_file, logo_size, color, f"LOGO {i+1}")
     
-    for i, img_file in enumerate(inline_img):
+    for i, img_file in enumerate(inline_img_paths):
         if not os.path.exists(img_file):
             color = ["#95E1D3", "#F38181", "#AA96DA", "#FFD93D", "#6BCB77"][i % 5]
             create_dummy_image(img_file, (300, 200), color, f"IMG {i+1}")
@@ -504,46 +437,73 @@ def setup_dummy_assets():
     print("Dummy assets ready!\n")
 
 
-
-
-
-def save_dataset_info(output_dir, image_pairs, style_labels, font_labels, config):
-    """Save dataset metadata to a JSON file."""
-    metadata = {
-        "generation_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "num_samples": len(image_pairs),
-        "complex_images": True,
-        "all_features_enabled": True,
-        "configuration": config,
-        "dataset": []
-    }
-    
-    for idx, (pair, style_label, font_label) in enumerate(zip(image_pairs, style_labels, font_labels)):
-        metadata["dataset"].append({
-            "pair_id": idx,
-            "img1": pair[0],
-            "img2": pair[1],
-            "style_label": style_label,
-            "font_label": font_label,
-            "style_match": "identical" if style_label == 1 else "different",
-            "font_match": "same" if font_label == 1 else "different"
-        })
-    
-    metadata_path = os.path.join(output_dir, "dataset_metadata.json")
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    print(f"\nDataset metadata saved to: {metadata_path}")
-
-
-# ============================================================
-# MAIN EXECUTION
-# ============================================================
-def create_complex_images(dataset_directory, num_samples=50, generate_image=None):
+def create_complex_images(
+    dataset_directory,
+    num_samples=50,
+    llm_generator=None,
+    config=None
+):
     """
     Creates a dataset of COMPLEX images only - all features always enabled.
+    
+    Args:
+        dataset_directory: Directory where images will be saved
+        num_samples: Number of images to generate
+        llm_generator: LLMTextGenerator instance for text generation
+        config: Dictionary containing configuration:
+            - img_size: Tuple (width, height) for image dimensions
+            - logo_size: Tuple (width, height) for logo dimensions
+            - font_list: List of font paths
+            - background_colors: List of background color hex codes
+            - text_colors: List of text color hex codes
+            - border_color: Border color hex code
+            - border: List of border widths
+            - logo_path: List of logo file paths
+            - logo_position: List of logo positions
+            - inline_img: List of inline image file paths
+            - table_borders: List of table border widths
+            - table_border_colors: List of table border color hex codes
+            - table_min_rows: Minimum table rows
+            - table_max_rows: Maximum table rows
+            - table_min_cols: Minimum table columns
+            - table_max_cols: Maximum table columns
+            - generate_presentation_text: Boolean to enable presentation text generation
+            - use_llm: Boolean indicating if LLM is enabled
+            - presentation_text_max_length: Maximum length of presentation text
+    
+    Returns:
+        Tuple of (images, presentation_texts, full_data):
+        - images: List of image file paths
+        - presentation_texts: List of presentation text strings
+        - full_data: List of dictionaries with image metadata
     """
+    if config is None:
+        raise ValueError("config parameter is required")
+    
+    # Extract configuration values
+    img_size = config.get('img_size', (224, 224))
+    logo_size = config.get('logo_size', (20, 20))
+    font_list = config.get('font_list', [])
+    background_colors = config.get('background_colors', [])
+    text_colors = config.get('text_colors', [])
+    border_color = config.get('border_color', "#000000")
+    border = config.get('border', [2, 3, 4, 5])
+    logo_path = config.get('logo_path', [])
+    logo_position = config.get('logo_position', [])
+    inline_img = config.get('inline_img', [])
+    table_borders = config.get('table_borders', [2, 3, 4])
+    table_border_colors = config.get('table_border_colors', [])
+    table_min_rows = config.get('table_min_rows', 2)
+    table_max_rows = config.get('table_max_rows', 4)
+    table_min_cols = config.get('table_min_cols', 2)
+    table_max_cols = config.get('table_max_cols', 4)
+    generate_presentation_text = config.get('generate_presentation_text', False)
+    use_llm = config.get('use_llm', True)
+    presentation_text_max_length = config.get('presentation_text_max_length', 400)
+    
     images = []
+    presentation_texts = []
+    full_data = []
     i = 0
 
     while i < num_samples:
@@ -556,8 +516,20 @@ def create_complex_images(dataset_directory, num_samples=50, generate_image=None
         table_border_1 = random.choice(table_borders)
         table_border_color_1 = random.choice(table_border_colors)
 
-        # Generate random text (always 3 lines for complex images)
-        texts = [generate_random_text() for _ in range(3)]
+        # Generate meaningful text (always 3 lines for complex images)
+        # Title, bullet point 1, bullet point 2
+        # Generate title first, then use it as context for bullets
+        if llm_generator:
+            title = llm_generator.generate_title()
+            bullet1 = llm_generator.generate_bullet_point(title=title)
+            bullet2 = llm_generator.generate_bullet_point(title=title)
+        else:
+            # Fallback if no LLM generator provided
+            title = "Sample Title"
+            bullet1 = "Sample bullet point 1"
+            bullet2 = "Sample bullet point 2"
+        
+        texts = [title, bullet1, bullet2]
         line_spacing = random.choice([1, 2])
         border_status = True  # Always enabled
 
@@ -565,17 +537,25 @@ def create_complex_images(dataset_directory, num_samples=50, generate_image=None
         add_image = random.choice(inline_img)
         add_image_2 = random.choice([img for img in inline_img if img != add_image])
 
-        # Generate larger table data with SHORTER text for 224x224 images
-        num_rows = random.randint(TABLE_MIN_ROWS, TABLE_MAX_ROWS)
-        num_cols = random.randint(TABLE_MIN_COLS, TABLE_MAX_COLS)
-        # Generate table data with shorter text (single short words)
-        table_headers = [generate_random_text(num_words=1, min_word_length=2, max_word_length=4) 
-                        for _ in range(num_cols)]
-        table_data = []
-        for row in range(num_rows):
-            row_data = [generate_random_text(num_words=1, min_word_length=2, max_word_length=4) 
-                       for col in range(num_cols)]
-            table_data.append(row_data)
+        # Generate larger table data with meaningful content
+        num_rows = random.randint(table_min_rows, table_max_rows)
+        num_cols = random.randint(table_min_cols, table_max_cols)
+        
+        # Generate meaningful table headers and data
+        if llm_generator:
+            table_headers = llm_generator.generate_table_headers(num_cols)
+            # Generate table data
+            table_data = []
+            for row in range(num_rows):
+                row_data = []
+                for col_idx, header in enumerate(table_headers):
+                    value = llm_generator.generate_table_cell_data(header, row + 1)
+                    row_data.append(value)
+                table_data.append(row_data)
+        else:
+            # Fallback if no LLM generator provided
+            table_headers = [f"Header {j+1}" for j in range(num_cols)]
+            table_data = [[f"Data {i+1}-{j+1}" for j in range(num_cols)] for i in range(num_rows)]
 
         # Generate the image
         img_1_path = f"{dataset_directory}\\img1_{i}.png"
@@ -607,67 +587,70 @@ def create_complex_images(dataset_directory, num_samples=50, generate_image=None
             table_border=table_border_1,
             table_border_color=table_border_color_1
         )
+        
+        # Generate presentation text AFTER image creation by analyzing the image
+        presentation_text = ""
+        if generate_presentation_text:
+            if not use_llm or not llm_generator:
+                print(f"Warning: GENERATE_PRESENTATION_TEXT requires USE_LLM=True and llm_generator")
+                presentation_text = f"Presentation about this slide (LLM disabled)"
+            else:
+                try:
+                    # Use vision model to analyze the actual generated image
+                    print(f"\nGenerating presentation text for img1_{i}.png...")
+                    presentation_text = llm_generator.generate_presentation_text_from_image(
+                        image_path=img_1_path,
+                        max_length=presentation_text_max_length
+                    )
+
+                    if presentation_text and "analysis unavailable" not in presentation_text.lower() and "disabled" not in presentation_text.lower() and "api key" not in presentation_text.lower():
+                        print(f"✓ Successfully generated presentation text for img1_{i}.png")
+                        print(f"  Text: {presentation_text[:100]}..." if len(presentation_text) > 100 else f"  Text: {presentation_text}")
+                    else:
+                        # Vision failed or not supported - use content-based generation
+                        if not presentation_text:
+                            print(f"Note: Using content-based text generation (vision not available or failed)...")
+                        else:
+                            print(f"⚠ Warning: Vision analysis failed, generating text from slide content...")
+                        # Generate meaningful presentation text based on slide content
+                        try:
+                            presentation_text = llm_generator.generate_presentation_text_from_content(
+                                title=texts[0],
+                                bullet_points=[texts[1], texts[2]],
+                                table_headers=table_headers,
+                                max_length=presentation_text_max_length
+                            )
+                            
+                            if presentation_text and "analysis unavailable" not in presentation_text.lower() and "disabled" not in presentation_text.lower():
+                                print(f"✓ Generated presentation text from slide content ({len(presentation_text)} chars)")
+                            else:
+                                print(f"  Fallback generation returned error text")
+                        except Exception as e2:
+                            print(f"  Fallback generation also failed: {e2}")
+                            # Last resort: create a simple description from available content
+                            presentation_text = f"This slide presents {texts[0].lower()}. Key highlights include {texts[1].lower()} and {texts[2].lower()}. The slide also contains a data table with {', '.join(table_headers)}."
+                            if len(presentation_text) > presentation_text_max_length:
+                                presentation_text = presentation_text[:presentation_text_max_length - 3] + "..."
+                            print(f"✓ Generated basic presentation text from slide content")
+                except Exception as e:
+                    print(f"✗ Error: Failed to generate presentation text from image: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Try to generate a basic text description from slide content
+                    try:
+                        presentation_text = f"This slide presents {texts[0].lower()}. Key highlights include {texts[1].lower()} and {texts[2].lower()}. The slide also contains a data table with {', '.join(table_headers)}."
+                        if len(presentation_text) > presentation_text_max_length:
+                            presentation_text = presentation_text[:presentation_text_max_length - 3] + "..."
+                        print(f"✓ Generated basic presentation text from slide content")
+                    except:
+                        presentation_text = f"Presentation about this slide (image analysis failed)"
+        else:
+            presentation_text = f"Presentation about this slide (disabled)"
+        
+        images.append(img_1_path)
+        presentation_texts.append(presentation_text)
+        temp_dict = {'img_path': 'img_1_path', 'text': presentation_text, 'in-sync': 1}
+        full_data.append(temp_dict)
         i += 1
-
-def main():
-    """Main function to generate complex images dataset."""
-    print("=" * 70)
-    print("COMPLEX PRESENTATION STYLE DATASET GENERATOR")
-    print("All features enabled: Tables, Logos, 2 Images, Bullets, Borders")
-    print("=" * 70)
-    print()
     
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    print(f"Output directory: {os.path.abspath(OUTPUT_DIR)}")
-    print()
-    
-    setup_dummy_assets()
-    
-    config = {
-        "num_samples": NUM_SAMPLES,
-        "table_min_rows": TABLE_MIN_ROWS,
-        "table_max_rows": TABLE_MAX_ROWS,
-        "table_min_cols": TABLE_MIN_COLS,
-        "table_max_cols": TABLE_MAX_COLS,
-        "image_size": img_size,
-        "fonts": font_list,
-        "background_colors": background_colors,
-        "text_colors": text_colors,
-        "complex_mode": True,
-        "features": {
-            "tables": "always_enabled",
-            "logos": "always_enabled",
-            "inline_images": "always_2_images",
-            "bullets": "always_enabled",
-            "borders": "always_enabled"
-        }
-    }
-    
-    print("Configuration:")
-    print(f"  - Number of samples: {NUM_SAMPLES}")
-    print(f"  - Table rows: {TABLE_MIN_ROWS}-{TABLE_MAX_ROWS}")
-    print(f"  - Table columns: {TABLE_MIN_COLS}-{TABLE_MAX_COLS}")
-    print(f"  - Image size: {img_size[0]}x{img_size[1]}")
-    print(f"  - Complex mode: ALL features enabled")
-    print()
-    
-    print("Generating complex dataset...")
-    print("-" * 70)
-    
-    create_complex_images(
-        dataset_directory=OUTPUT_DIR,
-        num_samples=NUM_SAMPLES,
-        generate_image=generate_image
-    )
-
-    print("=" * 70)
-    print("COMPLEX DATASET GENERATION COMPLETE!")
-    print("=" * 70)
-    print(f"\nCheck the '{OUTPUT_DIR}' folder for your generated images.")
-    print(f"Total files created: 50 images")
-    print()
-
-
-if __name__ == "__main__":
-    main()
-
+    return images, presentation_texts, full_data
